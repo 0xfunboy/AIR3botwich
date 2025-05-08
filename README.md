@@ -1,226 +1,115 @@
-# ElizaOS Experimental Client-Twitch Plugin
+ Drop‑in `README.md`
 
-The **ElizaOS Client-Twitch Plugin** enables your ElizaOS agent to interact with Twitch chat. It supports reading chat messages via EventSub WebSockets, sending chat messages through the Twitch Helix Chat API, and handling auto-post features (e.g. posting news from RSS feeds). This custom plugin is fully integrated into the ElizaOS runtime and is designed to work 24/7 with automatic token refresh and detailed logging for debugging.
+```markdown
+# AIR³ Relay Bot
 
-> **Note:** This plugin requires that your Twitch bot account is a moderator (or has the appropriate permissions) on the target channel.
+> *Scrape YouTube & X live chats · Relay to Twitch · Minimal dashboard*
 
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Configuration](#configuration)
-  - [Character JSON File](#character-json-file)
-  - [Environment Variables](#environment-variables)
-- [Usage](#usage)
-  - [Running the Plugin](#running-the-plugin)
-  - [Automatic Token Refresh](#automatic-token-refresh)
-- [Logging and Debugging](#logging-and-debugging)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+<table>
+<tr><td><b>Language</b></td><td>TypeScript (ES2022 / ESM)</td></tr>
+<tr><td><b>Runtime</b></td><td>Node 22 + PNPM 10</td></tr>
+<tr><td><b>Major deps</b></td><td>Playwright · youtube‑chat · Socket.IO · zod · Express</td></tr>
+</table>
 
 ---
 
-## Overview
+## ✨ Features
 
-The ElizaOS Client-Twitch Plugin is designed to integrate Twitch chat functionality into your agent. It allows your agent to:
-- **Read chat messages:** Automatically subscribe to the `channel.chat.message` EventSub events via WebSocket.
-- **Send chat messages:** Use the Twitch Helix Chat API to post messages and announcements.
-- **Auto-post content:** Automatically post updates (for example, RSS feed items) when chat activity is low.
-- **Token management:** Automatically refresh OAuth tokens before they expire to ensure continuous operation.
-
----
-
-## Features
-
-- **WebSocket-based EventSub integration:** Listens for chat messages and other events from Twitch.
-- **Helix Chat API support:** Sends regular chat messages and announcements.
-- **Automatic token refresh:** A separate module/script refreshes OAuth tokens using the Twitch refresh token.
-- **Detailed logging:** Logs all key events and errors to assist with debugging.
-- **Customizable templates:** Provides templates for chat response, auto-posting, and response decisions.
-- **Integrated auto-post configuration:** Reads RSS feeds and posts aggregator items during periods of inactivity.
+* **Dual listeners** – YouTube Live & X (Twitter) chat via Playwright.
+* **Two Twitch bots** – separate OAuth credentials for messages coming from YT and X.
+* **Rate‑limiter** – max 1 msg / 1.4 s per bot → never hits Twitch 20 msg / 30 s cap.
+* **Queue ageing** – messages older than 10 s are discarded on restart (no backlog spam).
+* **Self‑healing** – X listener retries every 60 s if chat is offline.
+* **Dashboard** – static SPA served at `http://localhost:7666`, streams last 50 log lines.
+* **Secrets‑safe** – `chatbot.json` is *ignored* by Git; sample file supplied.
 
 ---
 
-## Installation
+## 📦 Folder layout
 
-1. **Clone or Install the Plugin:**
-
-   If using a monorepo managed by PNPM (as with ElizaOS), add the client-twitch package:
-   ```bash
-   pnpm add @elizaos/client-twitch
-   ```
-
-2. **Install Required Dependencies:**
-
-   The plugin depends on a few packages. From within the client-twitch package directory, run:
-   ```bash
-   pnpm install
-   ```
-
-   Make sure you have the following packages installed:
-   - `node-fetch`
-   - `ws`
-   - `json5`
-   - `rss-parser` (for the auto-post feature)
-
-3. **Build the Package:**
-
-   Build the plugin using tsup:
-   ```bash
-   pnpm run build
-   ```
-
----
-
-## Configuration
-
-### Character JSON File
-
-Create or update your character configuration file (e.g., `myTwitchBot.character.json`) with the required Twitch settings. Example:
-
-```json
-{
-  "name": "MyTwitchBot",
-  "clients": ["twitch"],
-  "modelProvider": "ollama",
-  "settings": {
-    "ragKnowledge": true,
-    "model": "deepseek-r1:14",
-    "serverUrl": "http://localhost:11434",
-    "secrets": {
-      "TWITCH_BOT_USER_ID": "YOUR_CHANNEL_ID",
-      "TWITCH_BOT_USERNAME": "TWITCH_BOT_ACCOUNT_USERNAME",
-      "TWITCH_OAUTH_TOKEN": "YOUR_USER_ACCESS_TOKEN",
-      "TWITCH_CLIENT_ID": "YOUR_CLIENT_ID",
-      "TWITCH_CLIENT_SECRET": "YOUR_CLIENT_SECRET",
-      "TWITCH_CHANNEL_USER_ID": "BROADCASTER_CHANNEL_ID",
-      "TWITCH_REFRESH_TOKEN": "YOUR_REFRESH_TOKEN"
-    },
-    "voice": {
-      "model": "en_US-hfc_female-medium"
-    }
-  },
-  "discord": {  "... optional discord settings ..."  },
-  "plugins": [
-    "@elizaos/client-twitch"
-  ],
-  "bio": [
-    "I am XXX Agent, the heart of the ElizaOS ecosystem.",
-    "I merge AI with real-time data for actionable insights."
-  ],
-  "lore": [
-    "Built as an AI-driven chat bot to interact on Twitch.",
-    "I keep it real with data and analytics."
-  ]
-}
 ```
 
-> **Important:** Replace placeholder values with your actual tokens and secrets. The plugin will automatically use these values for authentication and token refresh.
+AIR3botwich/
+├─ src/
+│  ├─ index.ts            # Orchestrator (main runtime)
+│  ├─ utils/              # Twitch / YouTube / X helpers, relayQueue, …
+│  └─ web/
+│     ├─ server.ts        # Express + Socket.IO dashboard backend
+│     └─ public/          # Static SPA assets (index.html, css, js)
+├─ dist/                  # Built JS (tsup) – *generated*
+├─ .gitignore
+├─ chatbot.sample.json    # Template – copy to chatbot.json and fill secrets
+├─ pnpm-lock.yaml
+└─ tsconfig.json
 
-### Environment Variables
-
-The plugin can also read configuration from environment variables. You can set these in your deployment environment if preferred:
-- `TWITCH_BOT_USER_ID`
-- `TWITCH_BOT_USERNAME`
-- `TWITCH_OAUTH_TOKEN`
-- `TWITCH_CLIENT_ID`
-- `TWITCH_CLIENT_SECRET`
-- `TWITCH_CHANNEL_USER_ID`
-- `TWITCH_REFRESH_TOKEN`
-- Plus additional settings for auto-post configuration and team coordination
+````
 
 ---
 
-## Usage
+## 🚀 Quick start
 
-### Running the Plugin
-
-The plugin is loaded automatically by ElizaOS when `twitch` is specified in the character’s clients array. To run your agent (with the Twitch client integrated), simply start your ElizaOS agent as usual:
 ```bash
-pnpm start --character="path/to/myTwitchBot.character.json"
-```
+# 1. clone & install
+git clone https://github.com/YOU/air3botwich.git
+cd air3botwich
+pnpm install          # installs deps + downloads Playwright chromium
 
-### Automatic Token Refresh
+# 2. configure secrets
+cp chatbot.sample.json chatbot.json
+#   ↳ fill in Twitch client‑IDs, refresh‑tokens, X cookies, …
 
-A separate module `refreshAccessToken.ts` is provided to automatically refresh your Twitch OAuth token. This module should be integrated into your agent startup process so that tokens are updated at regular intervals (e.g., every 3 hours) before they expire.
+# 3. build & run
+pnpm run build        # compiles TypeScript → dist/
+pnpm run dev          # starts bot + dashboard (watch mode)
+#   ‑ or ‑
+pnpm run all          # full pipeline: install → build → dev
+````
 
-**To run the token refresh script manually:**
+Dashboard: **[http://localhost:7666](http://localhost:7666)**
+
+---
+
+## 🔧 Scripts
+
+| Command          | What it does                                           |
+| ---------------- | ------------------------------------------------------ |
+| `pnpm run build` | `tsup` → bundles `src/` to ESM code in `dist/`         |
+| `pnpm run bot`   | Runs `node dist/index.js` only (headless)              |
+| `pnpm run dash`  | Runs dashboard backend (`tsx src/web/server.ts`)       |
+| `pnpm run dev`   | Concurrent bot **and** dashboard                       |
+| `pnpm run all`   | `setup` → `build` → `dev` (one‑liner for fresh clones) |
+| `pnpm run clean` | Removes `dist/`                                        |
+
+`postinstall` automatically downloads Playwright’s browser binaries.
+
+---
+
+## 🗝️ Environment / secrets
+
+It’s recommended to replace raw secrets inside `chatbot.json` with **dotenv** variables:
+
 ```bash
-pnpm exec tsx src/refreshAccessToken.ts
+pnpm add dotenv
 ```
 
-**Integration in agent startup:**
-
-In your main agent `index.ts`, import and run the token refresh function before starting the Twitch client. For example:
-
-```typescript
-import { refreshAccessToken } from "@elizaos/client-twitch/src/refreshAccessToken";
-
-// Refresh the Twitch token before starting the agent.
-try {
-  await refreshAccessToken();
-} catch (error) {
-  // Log the error but do not crash the agent.
-  console.error("Warning: Failed to refresh Twitch token:", error);
-  // Optionally, implement a delay or fallback behavior here.
-}
+```ts
+import "dotenv/config";
+const clientId = process.env.TWITCH_YT_CLIENT_ID!;
 ```
 
-This ensures that the latest tokens are used for each API call.
+Then keep your real `.env` out of Git (`.gitignore`) and commit a `.env.sample`.
 
 ---
 
-## Logging and Debugging
+## 🛠️ Development notes
 
-The plugin uses the ElizaOS logger (`elizaLogger`) for detailed output. Key log messages include:
-- Connection events (WebSocket open, session welcome, subscription confirmation)
-- Token validation and refresh status
-- Auto-post configuration and execution details
-- LLM responses from the OpenAI model
-
-You can adjust the logging level in your ElizaOS configuration to show more detailed logs during debugging.
+* **Node 22 ESM** – no `require()`; use `import`.
+* **`relayQueue`** is SPS‑C (single‑producer single‑consumer); don’t await inside enqueue.
+* **YouTube 503**: the wrapper waits 5 s and retries automatically (see `youtubeAuth.ts`).
 
 ---
 
-## Troubleshooting
+## 📝 Licence
 
-- **Token Issues:**  
-  - Verify that your Twitch tokens (access and refresh) have the required scopes:
-    - `user:read:chat`
-    - `user:write:chat`
-    - `chat:edit`
-    - `user:bot`
-  - Use the `/oauth2/validate` endpoint to confirm token details.
+MIT © 2025 *Your Name / AIR³ Labs*
 
-- **Subscription Failures:**  
-  - Ensure that the bot’s user ID and the broadcaster's user ID are correctly set in your configuration.
-  - Make sure your bot account is a moderator or has the required permissions in the target channel.
-  - Check that your WebSocket session is valid and that the subscription request uses the correct session ID.
-
-- **Looping or Repeated LLM Calls:**  
-  - The plugin logs every call to the LLM (OpenAI) model. Review the logs to see if the conversation history or context is causing repeated calls.
-  - Ensure your templates (for response decisions and message generation) are correctly formatted to avoid misinterpretation.
-
-- **Auto-Post Failures:**  
-  - Confirm that your RSS feed URLs are reachable.
-  - Check that auto-post settings (inactivity threshold, minimum time between posts) are correctly configured.
-
----
-
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests in the repository with your suggested improvements or bug fixes. Ensure that you include tests and documentation updates as needed.
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-*For further assistance or questions, please refer to the ElizaOS documentation or contact the development team.*
